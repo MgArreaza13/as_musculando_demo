@@ -11,9 +11,12 @@ https://docs.djangoproject.com/en/1.11/ref/settings/
 """
 
 import os
-
+import pymysql
+pymysql.install_as_MySQLdb()
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import djcelery 
+djcelery.setup_loader()
 
 
 # Quick-start development settings - unsuitable for production
@@ -25,7 +28,7 @@ SECRET_KEY = '4z%zjdbfsz&vr%nb4c9dei3_@hk&@a0!vv@#6e%!cll8z))6=h'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -37,6 +40,18 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'djcelery',
+    'channels',
+    'apps.UserProfile',
+    'apps.Configuracion',
+    'apps.Clases',
+    'apps.Proveedores',
+    'apps.Colaboradores',
+    'apps.Caja',
+    'apps.Marketing',
+    'apps.Socios',
+    'apps.Panel',
 ]
 
 MIDDLEWARE = [
@@ -54,7 +69,7 @@ ROOT_URLCONF = 'Musculando_Demo.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -62,6 +77,15 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'apps.ContextProcesor.UserProfile.ProfileContextProcesor',
+                'apps.ContextProcesor.server.server_url',
+                'apps.ContextProcesor.UserProfile.SocioContextProcesor',
+                'apps.ContextProcesor.Estadistica.ResumenIngresos',
+                'apps.ContextProcesor.Estadistica.ResumenSociosActivos',
+                'apps.ContextProcesor.Estadistica.ResumenPlanes',
+                'apps.ContextProcesor.liquidacion.Liquidacion',
+                'apps.ContextProcesor.Presentimo.presentimo', 
+                
             ],
         },
     },
@@ -69,16 +93,39 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'Musculando_Demo.wsgi.application'
 
+CHANNEL_LAYERS = {
+ "default": {
+ "BACKEND": "asgi_redis.RedisChannelLayer",
+ "CONFIG": {
+   "hosts": [os.environ.get('REDIS_URL', 'redis://localhost:6379')],
+ },
+ 'ROUTING': 'Musculando_Demo.routing.channel_routing',
+ },
+}
+
+
+BROKER_URL = 'redis://localhost:6379/0' # Al Redis Server
+
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
 
 # Database
 # https://docs.djangoproject.com/en/1.11/ref/settings/#databases
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME':"demo",
+        "USER":"root",
+        "PASSWORD":'',
+        "PORT":'',
+        'HOST':"Localhost",
+        },
+        'OPTIONS': {
+            'sql_mode': 'traditional',
+        }
     }
-}
 
 
 # Password validation
@@ -100,12 +147,14 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+
 # Internationalization
 # https://docs.djangoproject.com/en/1.11/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+LANGUAGE_CODE = 'es-mx'
+
+TIME_ZONE = 'America/Caracas'
 
 USE_I18N = True
 
@@ -114,7 +163,81 @@ USE_L10N = True
 USE_TZ = True
 
 
+from celery.schedules import crontab
+from datetime import datetime
+
+USE_TZ = True
+
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TASK_SERIALIZER = 'json'
+TIME_ZONE = 'America/Caracas'
+
+CELERY_ENABLE_UTC = False
+CELERY_TIMEZONE = TIME_ZONE
+
+t = datetime.today()
+diario = crontab(minute=0, hour=6)
+mensual = crontab(minute=0, hour=0)
+
+CELERYBEAT_SCHEDULE = {
+    'desactivate-socio': {
+        'task': 'apps.Socios.tasks.desactivatesocios',
+        'schedule': diario,
+    },
+    'aguinaldo-colaborador': {
+        'task': 'apps.Colaboradores.tasks.aguinaldo',
+        'schedule': mensual,
+    },
+    'honorario-colaborador': {
+        'task': 'apps.Colaboradores.tasks.SueldoMensual',
+        'schedule': diario,
+    },
+}
+
+
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.11/howto/static-files/
 
 STATIC_URL = '/static/'
+
+MEDIA_URL = '/media/'
+
+MEDIA_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'media')
+
+STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static'),)
+
+#STATIC_ROOT = "/home/multipoint/multipoint/MultiPoint/static"
+
+
+EMAIL_USE_TLS = True
+EMAIL_HOST = 'b7000615.ferozo.com'
+EMAIL_HOST_USER = 'musculando@b7000615.ferozo.com'
+EMAIL_HOST_PASSWORD = 'Adolf5454@'
+EMAIL_PORT = 587
+
+#CACHES = {'default': {
+#        'BACKEND ': 'django.core.cache.backends.db.DatabaseCache',
+#        'LOCATION': 'redis://localhost:6379/0',
+#        'OPTIONS': {
+#        'DB':1,
+#        'PARSER_CLASS':'redis.connection.HiredisParser'
+#        }
+#    }
+#}
+
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://localhost:6379/0',
+        'OPTIONS': {
+             'DB':1,
+            'PARSER_CLASS':'redis.connection.HiredisParser'
+        }
+    }
+}
